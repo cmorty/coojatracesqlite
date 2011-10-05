@@ -1,0 +1,11 @@
+.classpath
+.project
+.nfs*
+.scala_dependencies
+.settings/
+scaladoc/
+bin/
+build/
+coojatrace-sqlite.jar
+hs_err*.log
+
