@@ -6,6 +6,8 @@ import coojatrace._
 import rules._
 import logrules._
 
+import java.util.{Observer, Observable}
+
 import com.almworks.sqlite4java._
 
 
@@ -21,29 +23,19 @@ package sqlitelog {
  * @param file SQLite database filename
  * @param sim current simulation
  */
-case class SQLiteDB(file: String)(implicit sim: Simulation) 
-  extends SQLiteQueue(new java.io.File(file)) {
-  // start job queue (opens or creates db)
-  start()
-
-  // stop queue / close db on plugin deactivation
-  CoojaTracePlugin.forSim(sim).onCleanUp {
-    this.stop(true)
-  }
-
+case class SQLiteDB(file: String)(implicit sim: Simulation) {
   /**
-   * Convenience function for executing DB jobs.
-   *
-   * @param fun job function, called with SQLLiteConnection object
-   * @return [[SQLiteJob]] object for obtaining results
-   * @tparam result type of job
+   * DB connection. Lazily initialized to ensure this is called from the simulation thread
+   * as the sqlite wrapper is not thread safe and refuses to work if initialized from another thread.
    */
-  def exec[T](fun: SQLiteConnection => T): SQLiteJob[T] = {
-    execute[T, SQLiteJob[T]](new SQLiteJob[T]() {
-      protected def job(conn: SQLiteConnection): T = {
-        fun(conn)
-      }
-    })
+  lazy val connection: SQLiteConnection = {
+    // close db on plugin deactivation
+    CoojaTracePlugin.forSim(sim).onCleanUp {
+      connection.dispose()
+    }
+    
+    // opens or create db
+    new SQLiteConnection(new java.io.File(file)).open(true)
   }
 }
 
@@ -60,7 +52,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation)
  */
 case class LogTable(db: SQLiteDB, table: String, columns: List[(String, String)], timeColumn: String = "Time")(implicit sim: Simulation) extends LogDestination {
   // active as long as queue is running (i.e. db connection is open)
-  def active = !db.isStopped
+  def active = db.connection.isOpen
   
   /**
    * Logger.
@@ -87,38 +79,44 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[(String, String)]
    */
   val coldef = (colNames zip colTypes).map(c => c._1 + " " + c._2).mkString("(", ", ", ")")
 
-  // recreate table and save prepared INSERT statement
-  val insertStatement = db.exec { conn =>
-    conn.exec("DROP TABLE IF EXISTS " + table)
-    conn.exec("CREATE TABLE " + table + coldef)
-    conn.prepare("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
-                 " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")"), true)
-  }.complete()
-  logger.info("Created table " + table)
+  // recreate table, start transaction and save prepared INSERT statement
+  lazy val insertStatement = {
+    db.connection.exec("DROP TABLE IF EXISTS " + table)
+    db.connection.exec("CREATE TABLE " + table + coldef)
+    logger.info("Created table " + table)
+    db.connection.exec("BEGIN")
+    db.connection.prepare("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
+                          " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")"), true)
+  }
+
+  // add observer to Simulation which commits transaction when sim is stopped
+  sim.addObserver(new Observer() {
+    def update(obs: Observable, obj: Object) {
+      if(!sim.isRunning) db.connection.exec("COMMIT")
+    }
+  })
 
   def log(values: List[_]) {
     // check for right number of columns
     require(values.size == columns.size, "incorrect column count")
 
-    db.exec { conn =>
-      try {
-        // bind value (and time if not disabled) to insert statement
-        val start = if(timeColumn != null) {
-          insertStatement.bind(1, sim.getSimulationTime)
-          2
-        } else {
-          1
-        }
-        for((v, i) <- values.zipWithIndex) insertStatement.bind(i+start, v.toString)
-        
-        // execute statement
-        insertStatement.step()
-      } catch {
-        case e: Exception => logger.error("DB exception: " + e)
-      } finally {
-        // reset bindings for next call
-        insertStatement.reset()
+    try {
+      // bind value (and time if not disabled) to insert statement
+      val start = if(timeColumn != null) {
+        insertStatement.bind(1, sim.getSimulationTime)
+        2
+      } else {
+        1
       }
+      for((v, i) <- values.zipWithIndex) insertStatement.bind(i+start, v.toString)
+      
+      // execute statement
+      insertStatement.step()
+    } catch {
+      case e: Exception => logger.error("DB exception: " + e)
+    } finally {
+      // reset bindings for next call
+      insertStatement.reset()
     }
   }
 }
