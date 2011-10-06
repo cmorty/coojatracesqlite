@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <project name="CoojaTrace-sqlite" default="jar" basedir=".">
-  <property name="cooja" value="../.."/>
+  <property name="cooja" value="../../.."/>
   <property name="archive" value="coojatrace-sqlite.jar"/>
 
   <target name="init">
