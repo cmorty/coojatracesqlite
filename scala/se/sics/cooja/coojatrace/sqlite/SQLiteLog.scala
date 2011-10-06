@@ -44,13 +44,12 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) {
  *
  * @param db [[SQLiteQueue]] object for the database in which table is found
  * @param table database table to write to. Will be created or cleared if needed
- * @param columns list of (name -> type) tuples for table column definition. Type names as in
- *   sqlite SQL syntax
+ * @param columns list of column names.
  * @param timeColumn (optional) column name for simulation time. When set to `null`, time column
  *   will not be logged, default: "Time"
  * @param sim the current [[Simulation]]
  */
-case class LogTable(db: SQLiteDB, table: String, columns: List[(String, String)], timeColumn: String = "Time")(implicit sim: Simulation) extends LogDestination {
+case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColumn: String = "Time")(implicit sim: Simulation) extends LogDestination {
   // active as long as queue is running (i.e. db connection is open)
   def active = db.connection.isOpen
   
@@ -62,27 +61,18 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[(String, String)]
   /**
    * Complete columns list (time added if not disabled).
    */
-  val allColumns = if(timeColumn != null) ((timeColumn -> "long") :: columns) else columns
+  val allColumns = if(timeColumn != null) (timeColumn :: columns) else columns
 
   /**
    * Column name list. Spaces replaced by underscores. Other characters not handled!
    */
-  val colNames = allColumns.map(_._1.replace(" ", "_"))
-  
-  /**
-   * Column type list.
-   */
-  val colTypes = allColumns.map(_._2)
-
-  /** 
-   * Column definition SQL.
-   */
-  val coldef = (colNames zip colTypes).map(c => c._1 + " " + c._2).mkString("(", ", ", ")")
+  val colNames = allColumns.map(_.replace(" ", "_"))
 
   // recreate table, start transaction and save prepared INSERT statement
+  // this is lazy to create (lazy) db for reasons above
   lazy val insertStatement = {
     db.connection.exec("DROP TABLE IF EXISTS " + table)
-    db.connection.exec("CREATE TABLE " + table + coldef)
+    db.connection.exec("CREATE TABLE " + table + colNames.mkString("(", ", ", ")"))
     logger.info("Created table " + table)
     db.connection.exec("BEGIN")
     db.connection.prepare("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
@@ -104,9 +94,9 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[(String, String)]
       // bind value (and time if not disabled) to insert statement
       val start = if(timeColumn != null) {
         insertStatement.bind(1, sim.getSimulationTime)
-        2
+        2 // bind values from seconds on
       } else {
-        1
+        1 // bind values from first on
       }
       for((v, i) <- values.zipWithIndex) insertStatement.bind(i+start, v.toString)
       
