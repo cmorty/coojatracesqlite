@@ -23,12 +23,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package se.sics.cooja.coojatrace.rules.logrules
+package de.fau.cooja.plugins.coojatrace.rules.logrules
 
 
 
 import se.sics.cooja._
-import coojatrace._
+
+import de.fau.cooja.plugins.coojatrace._
 import rules._
 import logrules._
 
