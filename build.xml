@@ -25,8 +25,8 @@
     <scalac srcdir="scala" destdir="build" deprecation="yes" addparams="-Yclosure-elim -optimise">
       <classpath>
         <pathelement location="${cooja}/dist/cooja.jar"/>
-      	<pathelement location="${cooja}/lib/jdom.jar"/>
-        <pathelement location="${cooja}/lib/log4j.jar"/>
+      	<pathelement location="${cooja}/dist/lib/jdom.jar"/>
+        <pathelement location="${cooja}/dist/lib/log4j.jar"/>
 	<pathelement location="${cooja_trace}/coojatrace.jar"/>
       	<pathelement location="${cooja_trace}/lib/scala-library.jar"/>
       	<pathelement location="${cooja_trace}/lib/scala-compiler.jar"/>
