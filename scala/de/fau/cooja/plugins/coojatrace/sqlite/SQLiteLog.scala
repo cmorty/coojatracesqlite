@@ -95,6 +95,15 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
    */
   val colNames = allColumns.map(_.replace(" ", "_"))
 
+
+  var uncommitedInserts = 0
+
+  def commit() {
+    db.connection.exec("COMMIT")
+    db.connection.exec("BEGIN")
+    uncommitedInserts = 0
+  }
+
   // recreate table, start transaction and save prepared INSERT statement
   // this is lazy to create (lazy) db for reasons above
   lazy val insertStatement = {
@@ -109,7 +118,7 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
   // add observer to Simulation which commits transaction when sim is stopped
   sim.addObserver(new Observer() {
     def update(obs: Observable, obj: Object) {
-      if(!sim.isRunning) db.connection.exec("COMMIT")
+      if(!sim.isRunning) commit()
     }
   })
 
@@ -129,6 +138,10 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
       
       // execute statement
       insertStatement.step()
+
+      // commit every 10000 inserts
+      uncommitedInserts += 1
+      if(uncommitedInserts >= 10000) commit()
     } catch {
       case e: Exception => logger.error("DB exception: " + e)
     } finally {
