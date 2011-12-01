@@ -62,7 +62,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) {
     }
     
     // opens or create db
-    new SQLiteConnection(new java.io.File(file)).open(true)
+    new SQLiteConnection(new java.io.File(file)).open(true).exec("BEGIN")
   }
 }
 
@@ -110,7 +110,7 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
     db.connection.exec("DROP TABLE IF EXISTS " + table)
     db.connection.exec("CREATE TABLE " + table + colNames.mkString("(", ", ", ")"))
     logger.info("Created table " + table)
-    db.connection.exec("BEGIN")
+    commit()
     db.connection.prepare("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
                           " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")"), true)
   }
