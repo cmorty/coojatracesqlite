@@ -1,4 +1,4 @@
-Source: cooja-coojatrace
+Source: cooja-coojatracesqlite
 Section: net
 Priority: extra
 Maintainer: Moritz 'Morty' Strübe <morty@cs.fau.de>
@@ -7,18 +7,20 @@ Build-Depends:
  default-jdk,
  ant,
  cooja,
- cooja-mspsim
+ cooja-mspsim,
+ cooja-coojatrace
 Build-Conflicts:
 Standards-Version: 3.9.1.0
-Homepage: http://i4git.informatik.uni-erlangen.de/contiki_projects.git/shortlog/refs/heads/gdbstub
+Homepage: http://i4git.informatik.uni-erlangen.de/contiki_projects.git/shortlog/refs/heads/coojatracesqlite
 Vcs-Git: git://i4git.informatik.uni-erlangen.de/contiki_projects.git
-Vcs-Browser: http://i4git.informatik.uni-erlangen.de/contiki_projects.git/shortlog/refs/heads/gdbstub
+Vcs-Browser: http://i4git.informatik.uni-erlangen.de/contiki_projects.git/shortlog/refs/heads/coojatracesqlite
 
-Package: cooja-coojatrace
+Package: cooja-coojatracesqlite
 Architecture: all
 Depends:
  cooja,
  cooja-mspsim,
+ cooja-coojatrace,
  ${misc:Depends},	
 Recommends:
  coojatracesqlite

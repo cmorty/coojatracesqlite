@@ -1,2 +1,2 @@
-cooja.config	/usr/share/cooja/apps/coojatrace
-lib/*			/usr/share/cooja/apps/coojatrace
+cooja.config	/usr/share/cooja/apps/coojatracesqlite
+lib/*			/usr/share/cooja/apps/coojatracesqlite
