@@ -21,9 +21,9 @@ Depends:
  cooja,
  cooja-mspsim,
  cooja-coojatrace,
- ${misc:Depends},	
+ ${misc:Depends}
 Recommends:
  coojatracesqlite
 Description: Tracing framework
-
+ An FRP- and Scala-Based framework to trace cooja
 
