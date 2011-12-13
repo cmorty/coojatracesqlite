@@ -12,13 +12,13 @@
 	<property name="log4j_jar"        value="${cooja_lib}/log4j.jar"/>
 
 
-	<property name="cooja_trace" value="../coojatrace"/>
-	<property name="coojatrace_jar" value="${cooja_trace}/coojatrace.jar"/>
+	<property name="coojatrace" value="../coojatrace"/>
+	<property name="coojatrace_jar" value="${coojatrace}/coojatrace.jar"/>
 
-	<property name="scala_lib" value="${cooja_trace}/lib"/>
+	<property name="scala_lib" value="${coojatrace}/lib"/>
 	<property name="scala-compiler_jar" value="${scala_lib}/scala-compiler.jar"   />
 	<property name="scala-library_jar" value="${scala_lib}/scala-library.jar"   />
-	<property name="scala-reactive_jar" value="${cooja_trace}/lib/scala-reactive.jar"/>
+	<property name="scala-reactive_jar" value="${scala_lib}/scala-reactive.jar"/>
 
 
 	<property name="archive" value="coojatrace-sqlite.jar"/>
