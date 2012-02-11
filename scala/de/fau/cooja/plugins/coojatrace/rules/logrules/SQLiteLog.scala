@@ -38,6 +38,10 @@ import java.util.{Observer, Observable}
 import com.almworks.sqlite4java._
 
 
+// speed up compilation
+class SQLiteLog
+
+
 
 /**
  * Package for logging to a sqlite database.
@@ -97,6 +101,7 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
 
 
   var uncommitedInserts = 0
+  var init = false
 
   def commit() {
     db.connection.exec("COMMIT")
@@ -107,10 +112,13 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
   // recreate table, start transaction and save prepared INSERT statement
   // this is lazy to create (lazy) db for reasons above
   lazy val insertStatement = {
-    db.connection.exec("DROP TABLE IF EXISTS " + table)
-    db.connection.exec("CREATE TABLE " + table + colNames.mkString("(", ", ", ")"))
-    logger.info("Created table " + table)
-    commit()
+	if(!init){
+		db.connection.exec("DROP TABLE IF EXISTS " + table)
+		db.connection.exec("CREATE TABLE " + table + colNames.mkString("(", ", ", ")"))
+		logger.info("Created table " + table)
+		commit()
+		init = true;
+	}
     db.connection.prepare("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
                           " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")"), true)
   }
