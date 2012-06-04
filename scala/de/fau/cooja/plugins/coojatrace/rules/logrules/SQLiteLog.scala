@@ -94,7 +94,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
   def act() {
     sim.addObserver(new Observer() {
 		def update(obs: Observable, obj: Object) {
-			if(!sim.isRunning){
+			if(!sim.isRunning()){
 			   send(Commit, Actor.self) 
 			} 
 		}
@@ -118,13 +118,13 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
           case Close => active = false 
           case Commit => forceflush = true
           case prep:PrepareStmntQuery => 
-            sender ! PrepareStmnt(connection.prepare(prep.query, true))
+          	sender ! PrepareStmnt(connection.prepare(prep.query, true))
           case stmt:PrepareStmnt =>
             stmt.stmt.step
             stmt.stmt.reset
             uncommit += 1
             lock.release()
-          case _ => {println("Something went wrong here!")}
+          case _ => {log.error("Got unexpected class!")}
 		}
     }
     active = false
@@ -177,6 +177,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
  */
 case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColumn: String = "Time")(implicit sim: Simulation) extends LogDestination {
   // active as long as queue is running (i.e. db connection is open)
+  
   def active = db.active
   implicit def string2PrepareStmntQuery(query : String) = new PrepareStmntQuery(query)
 
@@ -208,8 +209,9 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
     db ! "CREATE TABLE " + table + colNames.mkString("(", ", ", ")")
     logger.info("Creating Table " + table)
     db ! Commit
-    db ! "INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
-                          " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")")
+
+    db ! PrepareStmntQuery("INSERT INTO " + table + colNames.mkString("(", ", ", ")") +
+                          " VALUES " + colNames.map(c => "?").mkString("(", ", ", ")"))
     receiveWithin(10000){
       case rep:PrepareStmnt => 
       	CoojaTracePlugin.forSim(sim).onCleanUp {
