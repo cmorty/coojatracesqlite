@@ -31,13 +31,14 @@ import se.sics.cooja._
 import se.sics.cooja.Simulation._
 import scala.actors._
 import scala.actors.Actor._
-import scala.concurrent.Lock
+
 
 import de.fau.cooja.plugins.coojatrace._
 import rules._
 import logrules._
 
 import java.util.{Observer, Observable}
+import java.util.concurrent.Semaphore
 
 import com.almworks.sqlite4java._
 
@@ -52,8 +53,11 @@ class SQLiteLog
  */
 package sqlitelog {
 
+  
   case class PrepareStmntQuery(query : String)
   case class PrepareStmnt(stmt : SQLiteStatement)
+  case class PrepareData(stmt: SQLiteStatement, values: List[_])
+  case class PrepareStmntDispose(stmt : SQLiteStatement)
   
   case object Close
   case object Commit
@@ -71,8 +75,9 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
    * Logger.
    */
   val log = org.apache.log4j.Logger.getLogger(this.getClass)
-  
-  val lock = new Lock () 
+
+  // 30 should be enough to ensure efficiant work
+  val sem = new Semaphore(30) 
   
   log.info("Created DB-Object: " + file)
   
@@ -119,11 +124,16 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
           case Commit => forceflush = true
           case prep:PrepareStmntQuery => 
           	sender ! PrepareStmnt(connection.prepare(prep.query, true))
-          case stmt:PrepareStmnt =>
-            stmt.stmt.step
-            stmt.stmt.reset
+          case pdata:PrepareData =>
+            for((v, i) <- pdata.values.zipWithIndex){
+              pdata.stmt.bind(1 + i, v.toString)
+            } 
+            pdata.stmt.step
+            pdata.stmt.reset
             uncommit += 1
-            lock.release()
+            sem.release()
+          case disp:PrepareStmntDispose =>
+            disp.stmt.dispose()
           case _ => {log.error("Got unexpected class!")}
 		}
     }
@@ -155,6 +165,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
     
     // opens or create db
     val conn = new SQLiteConnection(new java.io.File(file)).open(true)
+    //If something crashes the data is worthless. This improves the performance significantly. 
     conn.exec("PRAGMA synchronous = OFF")
     conn.exec("BEGIN")
     active = true
@@ -179,7 +190,6 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
   // active as long as queue is running (i.e. db connection is open)
   
   def active = db.active
-  implicit def string2PrepareStmntQuery(query : String) = new PrepareStmntQuery(query)
 
   /**
    * Logger.
@@ -198,13 +208,11 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
    */
   val colNames = allColumns.map(_.replace(" ", "_"))
 
-  var lockctr = 0
-  
   
 
   // recreate table, start transaction and save prepared INSERT statement
-  // this is lazy to create (lazy) db for reasons above
-  private lazy val insertStatement:PrepareStmnt = {
+  // this is lazy to avoid imideate deletion of the database
+  private lazy val insertStatement:SQLiteStatement = {
     db ! "DROP TABLE IF EXISTS " + table
     db ! "CREATE TABLE " + table + colNames.mkString("(", ", ", ")")
     logger.info("Creating Table " + table)
@@ -215,9 +223,9 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
     receiveWithin(10000){
       case rep:PrepareStmnt => 
       	CoojaTracePlugin.forSim(sim).onCleanUp {
-      		rep.stmt.dispose
+      		db ! PrepareStmntDispose(rep.stmt)
       	}
-        rep
+        rep.stmt
       case TIMEOUT => throw new UnsupportedOperationException("Unable to get prepared statement!"); 
     }
   }
@@ -228,26 +236,20 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
       // check for right number of columns
 	  require(values.size == columns.size, "incorrect column count")
     
-	  if (!db.lock.available){
-	    lockctr += 1
-	    if(lockctr == 10){
-	      logger.warn("The Database is slowing us down")
-	    }
+	  if (!db.sem.tryAcquire()){
+	    logger.warn("The Database is slowing us down")
+	    db.sem.acquire() //Make sure we slow things down until we get a semaphore
 	  }
-	  db.lock.acquire()
-	  
+	  	  
 	  // bind value (and time if not disabled) to insert statement
-	  val start = if(timeColumn != null) {
-	    insertStatement.stmt.bind(1, sim.getSimulationTime)
-	    2 // bind values from seconds on
+	  val data = if(timeColumn != null) {
+	    sim.getSimulationTime :: values
 	  } else {
-	    1 // bind values from first on
+	    values
 	  }
-	  for((v, i) <- values.zipWithIndex) insertStatement.stmt.bind(i+start, v.toString)
-	  
+	  	  
 	  // execute statement
-	  db ! insertStatement
-
+	  db ! PrepareData(insertStatement, data)
     
   }
 }
