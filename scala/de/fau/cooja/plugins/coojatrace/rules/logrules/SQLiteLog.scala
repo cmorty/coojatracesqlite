@@ -79,9 +79,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
   // 30 should be enough to ensure efficiant work
   val sem = new Semaphore(30) 
   
-  log.info("Created DB-Object: " + file)
-  
-  start()
+
     
   /**
    * DB connection. Lazily initialized to ensure this is called from the simulation thread
@@ -93,7 +91,9 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
   val flush = 1000
   
   
-
+  log.info("Created DB-Object: " + file)
+  
+  start()
   
   
   def act() {
@@ -107,7 +107,7 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
 	
 	log.info("Started DB-Actor")
     var uncommit = 0
-    
+    //Initialize connection
     connection
 	while(active){
 		if( uncommit >= flush || forceflush){		 
@@ -145,7 +145,9 @@ case class SQLiteDB(file: String)(implicit sim: Simulation) extends Actor {
   }
     
    
-  
+  /**
+   * Needs to be lazy so it will be initialized by the actor
+   */
   private lazy val connection: SQLiteConnection = {
     log.info("Init CON:" + file.toString() + "  Obj:" + this.toString + " Hash:" + this.hashCode)
     val mthis = this
@@ -207,7 +209,17 @@ case class LogTable(db: SQLiteDB, table: String, columns: List[String], timeColu
    * Column name list. Spaces replaced by underscores. Other characters not handled!
    */
   val colNames = allColumns.map(_.replace(" ", "_"))
-
+  
+  /** 
+   * Create the table after one second of execution
+   */ 
+  private val time:Long = 1000
+  sim.scheduleEvent(new TimeEvent(time){  
+     def execute(time:Long){
+		  insertStatement
+	  }
+  }, time)
+  
   
 
   // recreate table, start transaction and save prepared INSERT statement
